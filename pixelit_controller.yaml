@@ -1,0 +1,165 @@
+triggers:
+  - id: "1"
+    configuration:
+      itemName: PUT THE NAME OF YOUR ITEM HERE
+    type: core.ItemCommandTrigger
+conditions: []
+actions:
+  - inputs: {}
+    id: "2"
+    configuration:
+      type: application/javascript
+      script: >
+        /////////////////////////////
+
+        // Globale Variablen
+
+        /////////////////////////////
+
+        if (this.logger===undefined) this.logger = Java.type("org.slf4j.LoggerFactory").getLogger("org.openhab.model.script.Rules.PixelItCommandHandler");
+
+        if (this.ScriptExecution===undefined) this.ScriptExecution = Java.type("org.openhab.core.model.script.actions.ScriptExecution");
+
+        if (this.ZonedDateTime===undefined) this.ZonedDateTime = Java.type("java.time.ZonedDateTime");
+
+        if (this.HTTP===undefined) this.HTTP=Java.type("org.openhab.core.model.script.actions.HTTP");
+
+
+        if (this.ip===undefined) this.ip="PUT YOUR PIXELIT IP ADDRESS HERE (without http://)";
+
+        if (this.screens_names===undefined) this.screens_names=[];
+
+        if (this.screens_data===undefined) this.screens_data=[];
+
+        if (this.curscreen===undefined) this.curscreen="";
+
+
+        /////////////////////////////
+
+        // Funktion changeScreen
+
+        /////////////////////////////
+
+        if (this.changeScreen===undefined) this.changeScreen = function() {
+          this.logger.debug("PixelIt-Timer abgelaufen");
+          var newpos=0;
+          var pos=this.screens_names.indexOf(this.curscreen);
+          if (pos<0)
+            newpos=0;
+          else
+            if (pos<this.screens_names.length-1)
+                newpos=pos+1;
+          this.curscreen=this.screens_names[newpos];
+          var screen_def=this.screens_data[newpos];
+          var reschedule=this.sendToPixelIt(screen_def);
+          this.Timer.reschedule(this.ZonedDateTime.now().plusSeconds(reschedule));
+        }
+
+
+        /////////////////////////////
+
+        // Funktion sendToPixelIt
+
+        /////////////////////////////
+
+        if (this.sendToPixelIt===undefined) this.sendToPixelIt = function(screen_def) {
+            var displayTime=7;
+            try {
+                var obj=JSON.parse(screen_def);
+                if (obj.displayTime!==undefined) {
+                    if (!isNaN(obj.displayTime))
+                        displayTime=Number(obj.displayTime);
+                }
+            }
+            catch (objError) {
+                screen_def='{"switchAnimation":{"aktiv":true,"animation":"fade"},"bitmap":{"data":[0,0,65504,65504,65504,65504,0,0,0,65504,65504,65535,65535,65504,65504,0,0,65504,65504,65525,65525,65504,65504,0,0,65504,65504,65525,65525,65504,65504,0,0,0,65504,65504,65504,65504,0,0,0,0,21162,44373,44373,21162,0,0,0,0,21162,44373,44373,21162,0,0,0,0,0,21162,21162,0,0,0],"position":{"x":0,"y":0},"size":{"width":8,"height":8}}, "text":{"textString":'+JSON.stringify(screen_def)+',"bigFont":true,"scrollText":"auto","scrollTextDelay":80,"hexColor":"#FFFFFF"}}';
+            }
+            this.logger.debug("Code für PixelIt ("+this.ip+"): "+screen_def);
+            this.logger.debug("Anzeigedauer: "+displayTime);
+            var returnvalue = HTTP.sendHttpPostRequest("http://"+this.ip+"/api/screen", "application/json",screen_def);
+            this.logger.debug("Antwortcode: "+returnvalue);
+            if (returnvalue!='{"response":"OK"}') 
+               this.logger.warn("Antwort der PixelIt: "+returnvalue);
+            return displayTime;
+        }
+
+
+
+
+        /////////////////////////////
+
+        // MAIN
+
+        /////////////////////////////
+
+        var commandstring = String(command).split(' '); //command ist der übergebene Wert in dem Item, welches die Rule getriggert hat
+
+        var action=commandstring[0];
+          
+        switch (action) {
+          case "add":
+          case "update":
+            var screen_name=commandstring[1];
+            commandstring.splice(0,2);
+            var screen_def=commandstring.join(" ");
+            var pos=this.screens_names.indexOf(screen_name);
+            if (pos<0) {
+              this.screens_names.push(screen_name);
+              this.screens_data.push(screen_def);
+              this.logger.info("Screen angelegt: "+screen_name)
+            }
+            else {
+              this.screens_data[pos]=screen_def;
+              this.logger.info("Screen aktualisiert: "+screen_name)
+            }
+            break;
+          case "delete":
+            var screen_name=commandstring[1];
+            var pos=this.screens_names.indexOf(screen_name);
+            if (pos>=0) {
+              this.screens_names.splice(pos,1);
+              this.screens_data.splice(pos,1);
+              this.logger.info("Screen entfernt: "+screen_name)
+            }
+            break;
+          case "message":
+            commandstring.splice(0,1);
+            var screen_def=commandstring.join(" ");
+            var reschedule=this.sendToPixelIt(screen_def);
+            if (this.Timer!==undefined && this.Timer.isActive()) {
+                this.Timer.reschedule(this.ZonedDateTime.now().plusSeconds(reschedule));
+            }
+            break;
+          case "error":
+            commandstring.splice(0,1);
+            var msg=commandstring.join(" ");
+            var screen_def='{"displayTime":30, "sound": {"file": 6, "control":"play"}, "switchAnimation":{"aktiv":true,"animation":"fade"},"bitmapAnimation":{"data":[[63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,65535,65535,63488,63488,63488,63488,63488,63488,65535,65535,63488,63488,63488,63488,63488,63488,65535,65535,63488,63488,63488,63488,63488,63488,65535,65535,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,65535,65535,63488,63488,63488,63488,63488,63488,65535,65535,63488,63488,63488],[63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,0,0,63488,63488,63488,63488,63488,63488,0,0,63488,63488,63488,63488,63488,63488,0,0,63488,63488,63488,63488,63488,63488,0,0,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,63488,0,0,63488,63488,63488,63488,63488,63488,0,0,63488,63488,63488]],"animationDelay":200,"rubberbanding":false,"limitLoops":0},"text":{"textString":'+JSON.stringify(msg)+',"bigFont":true,"scrollText":"auto","scrollTextDelay":80,"hexColor":"#FFFFFF"}}';
+            var reschedule=this.sendToPixelIt(screen_def);
+            if (this.Timer!==undefined && this.Timer.isActive()) {
+                this.Timer.reschedule(this.ZonedDateTime.now().plusSeconds(reschedule));
+            }
+            break;
+          case "warning":
+            commandstring.splice(0,1);
+            var msg=commandstring.join(" ");
+            var screen_def='{"displayTime":30, "sound": {"file": 37, "control":"play"}, "switchAnimation":{"aktiv":true,"animation":"fade"},"bitmapAnimation":{"data":[[65514,65514,44352,0,44352,65504,65504,44352,65504,44352,0,65535,65535,65504,44352,0,44352,0,44352,65535,65535,44352,0,44352,0,44352,65504,65535,65535,0,44352,65504,44352,65504,65504,65535,65535,44352,65504,65504,65504,65504,44352,0,44352,65504,65504,44352,65504,44352,0,65535,65535,65504,44352,0,44352,0,44352,65535,65535,44352,0,0],[65514,65514,44352,0,44352,65504,65504,44352,65504,44352,0,44352,65504,65504,44352,0,44352,0,44352,65504,65504,44352,0,44352,0,44352,65504,65504,44352,0,44352,65504,44352,65504,65504,44352,0,44352,65504,65504,65504,65504,44352,0,44352,65504,65504,44352,65504,44352,0,44352,65504,65504,44352,0,44352,0,44352,65504,65504,44352,0,0]],"animationDelay":200,"rubberbanding":false,"limitLoops":0},"text":{"textString":'+JSON.stringify(msg)+',"bigFont":true,"scrollText":"auto","scrollTextDelay":80,"hexColor":"#FFFFFF"}}';
+            var reschedule=this.sendToPixelIt(screen_def);
+            if (this.Timer!==undefined && this.Timer.isActive()) {
+                this.Timer.reschedule(this.ZonedDateTime.now().plusSeconds(reschedule));
+            }
+            break;
+          case "brightness":
+            var brightness=commandstring[1];
+            this.sendToPixelIt('{"brightness":'+brightness+'}');
+            break;
+        }
+
+
+        this.logger.info(this.screens_names)
+
+
+        if (this.Timer===undefined) {
+            this.Timer = ScriptExecution.createTimer(ZonedDateTime.now().plusSeconds(1), this.changeScreen); 
+            this.logger.info("Timer für PixelIt angelegt");
+        }
+    type: script.ScriptAction
